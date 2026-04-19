@@ -15,7 +15,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:            "test-wails",
+		Title:            "My store",
 		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: assets,

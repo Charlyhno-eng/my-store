@@ -24,6 +24,7 @@ sudo apt install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev pkg-confi
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 export PATH="$PATH:$HOME/go/bin"
 
+go mod tidy
 wails doctor
 
 cd frontend
@@ -34,7 +35,6 @@ cd ..
 To setup the database :
 
 ```bash
-cd backend
 sqlite3 db/db.sqlite < db/schema.sql
 ```
 
@@ -43,3 +43,8 @@ sqlite3 db/db.sqlite < db/schema.sql
 ```bash
 wails dev -tags webkit2_41
 ```
+---
+
+## Food icons website
+
+([https://www.flaticon.com/free-icons/food](https://www.flaticon.com/free-icons/food))
