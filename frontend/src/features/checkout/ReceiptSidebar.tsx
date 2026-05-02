@@ -1,8 +1,11 @@
-import type { CategoryWithItems, ItemSelectionState } from "@/features/checkout/types";
+import { Button } from "@/components/ui/button";
+import type { CategoryWithItems, ItemSelectionState, CheckoutOrderLineInput } from "@/features/checkout/types";
 
 type ReceiptSidebarProps = {
   categories: CategoryWithItems[];
   selectionByItemId: Record<number, ItemSelectionState>;
+  onValidate: (lines: CheckoutOrderLineInput[]) => Promise<void>;
+  isSubmitting: boolean;
 };
 
 function parsePrice(value: string): number {
@@ -11,17 +14,15 @@ function parsePrice(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function ReceiptSidebar({
-  categories,
-  selectionByItemId,
-}: ReceiptSidebarProps) {
-  const selectedItems = categories
+export function ReceiptSidebar({ categories, selectionByItemId, onValidate, isSubmitting }: ReceiptSidebarProps) {
+  const selectedItems: CheckoutOrderLineInput[] = categories
     .flatMap((category) => category.items)
     .map((item) => {
       const state = selectionByItemId[item.id] ?? { quantity: 0, totalPrice: "" };
 
       return {
-        ...item,
+        itemId: item.id,
+        label: item.label,
         quantity: state.quantity,
         totalPrice: parsePrice(state.totalPrice),
       };
@@ -48,10 +49,7 @@ export function ReceiptSidebar({
             </div>
           ) : (
             selectedItems.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-2xl border bg-background p-4"
-              >
+              <div key={item.itemId} className="rounded-2xl border bg-background p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{item.label}</p>
@@ -79,6 +77,15 @@ export function ReceiptSidebar({
             <span>Total à payer</span>
             <span>{totalToPay.toFixed(2)} €</span>
           </div>
+
+          <Button
+            type="button"
+            className="mt-2 w-full"
+            disabled={selectedItems.length === 0 || isSubmitting}
+            onClick={() => onValidate(selectedItems)}
+          >
+            {isSubmitting ? "Validation..." : "Valider le ticket"}
+          </Button>
         </div>
       </section>
     </aside>

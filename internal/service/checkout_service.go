@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+
 type ItemDTO struct {
 	ID        int64  `json:"id"`
 	Label     string `json:"label"`
@@ -21,10 +22,15 @@ type CheckoutService struct {
 	db *sql.DB
 }
 
+
+// NewCheckoutService creates a new CheckoutService instance
+// with a given database connection.
 func NewCheckoutService(db *sql.DB) *CheckoutService {
 	return &CheckoutService{db: db}
 }
 
+// GetCheckoutCategories retrieves all categories and their associated items
+// from the database.
 func (s *CheckoutService) GetCheckoutCategories() ([]CategoryWithItemsDTO, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -46,7 +52,10 @@ func (s *CheckoutService) GetCheckoutCategories() ([]CategoryWithItemsDTO, error
 	}
 	defer rows.Close()
 
+	// Map used to group items by category ID
 	categoryMap := make(map[int64]*CategoryWithItemsDTO)
+
+	// Slice used to preserve the order of categories
 	var orderedIDs []int64
 
 	for rows.Next() {
@@ -56,6 +65,7 @@ func (s *CheckoutService) GetCheckoutCategories() ([]CategoryWithItemsDTO, error
 		var itemLabel sql.NullString
 		var imagePath sql.NullString
 
+		// Scan each row from the SQL result
 		if err := rows.Scan(
 			&categoryID,
 			&categoryLabel,
@@ -66,8 +76,10 @@ func (s *CheckoutService) GetCheckoutCategories() ([]CategoryWithItemsDTO, error
 			return nil, fmt.Errorf("scan checkout row: %w", err)
 		}
 
+		// Check if the category already exists in the map
 		category, exists := categoryMap[categoryID]
 		if !exists {
+			// If not, create it and store it
 			category = &CategoryWithItemsDTO{
 				ID:    categoryID,
 				Label: categoryLabel,
@@ -77,6 +89,7 @@ func (s *CheckoutService) GetCheckoutCategories() ([]CategoryWithItemsDTO, error
 			orderedIDs = append(orderedIDs, categoryID)
 		}
 
+		// If the row contains a valid item (LEFT JOIN can return NULL)
 		if itemID.Valid {
 			category.Items = append(category.Items, ItemDTO{
 				ID:        itemID.Int64,
@@ -86,14 +99,57 @@ func (s *CheckoutService) GetCheckoutCategories() ([]CategoryWithItemsDTO, error
 		}
 	}
 
+	// Check for errors during iteration
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate checkout rows: %w", err)
 	}
 
+	// Rebuild a properly ordered slice of categories
 	categories := make([]CategoryWithItemsDTO, 0, len(orderedIDs))
 	for _, id := range orderedIDs {
 		categories = append(categories, *categoryMap[id])
 	}
 
 	return categories, nil
+}
+
+// InsertOrder inserts a new order into the database.
+func (s *CheckoutService) InsertOrder(itemID int64, quantity int64, unitPrice float64) error {
+	if s.db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+
+	if quantity <= 0 {
+		return fmt.Errorf("quantity must be greater than 0")
+	}
+
+	if unitPrice < 0 {
+		return fmt.Errorf("unit price must be greater than or equal to 0")
+	}
+
+	result, err := s.db.Exec(`
+		INSERT INTO orders (item_id, quantity, unit_price)
+		VALUES (?, ?, ?)
+	`, itemID, quantity, unitPrice)
+	if err != nil {
+		return fmt.Errorf(
+			"insert order failed: itemID=%d quantity=%d unitPrice=%f err=%w",
+			itemID,
+			quantity,
+			unitPrice,
+			err,
+		)
+	}
+
+	// Ensure exactly one row was affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("insert order rows affected failed: %w", err)
+	}
+
+	if rowsAffected != 1 {
+		return fmt.Errorf("insert order affected %d rows", rowsAffected)
+	}
+
+	return nil
 }

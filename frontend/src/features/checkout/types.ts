@@ -14,3 +14,10 @@ export type ItemSelectionState = {
   quantity: number;
   totalPrice: string;
 };
+
+export type CheckoutOrderLineInput = {
+  itemId: number;
+  label: string;
+  quantity: number;
+  totalPrice: number;
+};

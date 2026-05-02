@@ -3,18 +3,18 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/features/checkout/ProductCard";
 import { ReceiptSidebar } from "@/features/checkout/ReceiptSidebar";
-import type { CategoryWithItems, ItemSelectionState } from "@/features/checkout/types";
-import { GetCheckoutCategories } from "../../wailsjs/go/main/App";
+import type { CategoryWithItems, ItemSelectionState, CheckoutOrderLineInput } from "@/features/checkout/types";
+import { InsertOrder, GetCheckoutCategories, SaveReceipt } from "../../wailsjs/go/main/App";
 
 function CheckoutPage() {
   const [categories, setCategories] = useState<CategoryWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectionByItemId, setSelectionByItemId] = useState<Record<number, ItemSelectionState>>({});
 
   useEffect(() => {
-    const isWailsAvailable =
-      typeof window !== "undefined" && !!window.go?.main?.App;
+    const isWailsAvailable = typeof window !== "undefined" && !!window.go?.main?.App;
 
     if (!isWailsAvailable) {
       setError("Wails runtime indisponible. Lance l'application avec wails dev.");
@@ -23,15 +23,9 @@ function CheckoutPage() {
     }
 
     GetCheckoutCategories()
-      .then((data) => {
-        setCategories(data ?? []);
-      })
-      .catch((err) => {
-        setError(String(err));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .then((data) => { setCategories(data ?? []) })
+      .catch((err) => { setError(String(err)) })
+      .finally(() => { setLoading(false) });
   }, []);
 
   const nonEmptyCategories = useMemo(() => {
@@ -48,10 +42,7 @@ function CheckoutPage() {
 
       return {
         ...prev,
-        [itemId]: {
-          ...current,
-          ...nextState,
-        },
+        [itemId]: { ...current, ...nextState },
       };
     });
   };
@@ -63,7 +54,6 @@ function CheckoutPage() {
 
   const decrementQuantity = (itemId: number) => {
     const current = getItemState(itemId);
-
     if (current.quantity <= 0) {
       return;
     }
@@ -73,6 +63,54 @@ function CheckoutPage() {
 
   const updatePrice = (itemId: number, totalPrice: string) => {
     updateItemState(itemId, { totalPrice });
+  };
+
+  const buildReceiptContent = (lines: CheckoutOrderLineInput[]) => {
+    const now = new Date();
+    const totalArticles = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const totalToPay = lines.reduce((sum, line) => sum + line.totalPrice, 0);
+
+    const formattedDate = now.toLocaleString("fr-FR");
+
+    return [
+      "MY STORE",
+      "Ticket de caisse",
+      formattedDate,
+      "--------------------------------",
+      ...lines.flatMap((line) => [
+        line.label,
+        `  Quantité : ${line.quantity}`,
+        `  Total : ${line.totalPrice.toFixed(2)} €`,
+      ]),
+      "--------------------------------",
+      `Articles : ${totalArticles}`,
+      `Total : ${totalToPay.toFixed(2)} €`,
+    ].join("\n");
+  };
+
+  const handleValidateCheckout = async (lines: CheckoutOrderLineInput[]) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      for (const line of lines) {
+        if (line.quantity <= 0) {
+          continue;
+        }
+
+        const unitPrice = line.quantity > 0 ? line.totalPrice / line.quantity : 0;
+        await InsertOrder(line.itemId, line.quantity, unitPrice);
+      }
+
+      const receiptContent = buildReceiptContent(lines);
+      await SaveReceipt(receiptContent);
+
+      setSelectionByItemId({});
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -98,7 +136,7 @@ function CheckoutPage() {
         )}
 
         {error && (
-          <div className="rounded-2xl border border-destructive/30 bg-card p-6 text-destructive shadow-sm">
+          <div className="mb-6 rounded-2xl border border-destructive/30 bg-card p-6 text-destructive shadow-sm">
             Erreur : {error}
           </div>
         )}
@@ -109,7 +147,7 @@ function CheckoutPage() {
           </div>
         )}
 
-        {!loading && !error && nonEmptyCategories.length > 0 && (
+        {!loading && nonEmptyCategories.length > 0 && (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <section className="min-w-0 space-y-8">
               {nonEmptyCategories.map((category) => (
@@ -146,6 +184,8 @@ function CheckoutPage() {
             <ReceiptSidebar
               categories={nonEmptyCategories}
               selectionByItemId={selectionByItemId}
+              onValidate={handleValidateCheckout}
+              isSubmitting={isSubmitting}
             />
           </div>
         )}

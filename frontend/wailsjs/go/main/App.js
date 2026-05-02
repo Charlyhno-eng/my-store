@@ -5,3 +5,11 @@
 export function GetCheckoutCategories() {
   return window['go']['main']['App']['GetCheckoutCategories']();
 }
+
+export function InsertOrder(arg1, arg2, arg3) {
+  return window['go']['main']['App']['InsertOrder'](arg1, arg2, arg3);
+}
+
+export function SaveReceipt(arg1) {
+  return window['go']['main']['App']['SaveReceipt'](arg1);
+}
