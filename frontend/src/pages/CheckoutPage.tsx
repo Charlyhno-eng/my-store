@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/features/checkout/ProductCard";
 import { ReceiptSidebar } from "@/features/checkout/ReceiptSidebar";
 import type { CategoryWithItems, ItemSelectionState, CheckoutOrderLineInput } from "@/features/checkout/types";
-import { InsertOrder, GetCheckoutCategories, SaveReceipt } from "../../wailsjs/go/main/App";
+import { InsertOrder, GetCheckoutCategories, SaveReceipt, GetItems } from "../../wailsjs/go/main/App";
 import BackToHomeButton from "@/components/navigation/BackToHomeButton";
 
 function CheckoutPage() {
@@ -23,42 +21,51 @@ function CheckoutPage() {
       return;
     }
 
-    GetCheckoutCategories()
-      .then((data) => { setCategories(data ?? []) })
-      .catch((err) => { setError(String(err)) })
-      .finally(() => { setLoading(false) });
+    Promise.all([GetCheckoutCategories(), GetItems()])
+      .then(([checkoutData, stockData]) => {
+        // Build a quick lookup: itemId → stockQuantity
+        const stockByItemId: Record<number, number> = {};
+        for (const stockItem of stockData ?? []) {
+          stockByItemId[stockItem.id] = stockItem.quantity;
+        }
+
+        // Merge stock quantity into each item
+        const merged: CategoryWithItems[] = (checkoutData ?? []).map((cat) => ({
+          ...cat,
+          items: cat.items.map((item) => ({
+            ...item,
+            stockQuantity: stockByItemId[item.id] ?? -1,
+          })),
+        }));
+
+        setCategories(merged);
+      })
+      .catch((err) => { setError(String(err)); })
+      .finally(() => { setLoading(false); });
   }, []);
 
-  const nonEmptyCategories = useMemo(() => {
-    return categories.filter((category) => category.items.length > 0);
-  }, [categories]);
+  const nonEmptyCategories = useMemo(
+    () => categories.filter((c) => c.items.length > 0),
+    [categories]
+  );
 
-  const getItemState = (itemId: number): ItemSelectionState => {
-    return selectionByItemId[itemId] ?? { quantity: 0, totalPrice: "" };
-  };
+  const getItemState = (itemId: number): ItemSelectionState =>
+    selectionByItemId[itemId] ?? { quantity: 0, totalPrice: "" };
 
   const updateItemState = (itemId: number, nextState: Partial<ItemSelectionState>) => {
     setSelectionByItemId((prev) => {
       const current = prev[itemId] ?? { quantity: 0, totalPrice: "" };
-
-      return {
-        ...prev,
-        [itemId]: { ...current, ...nextState },
-      };
+      return { ...prev, [itemId]: { ...current, ...nextState } };
     });
   };
 
   const incrementQuantity = (itemId: number) => {
-    const current = getItemState(itemId);
-    updateItemState(itemId, { quantity: current.quantity + 1 });
+    updateItemState(itemId, { quantity: getItemState(itemId).quantity + 1 });
   };
 
   const decrementQuantity = (itemId: number) => {
     const current = getItemState(itemId);
-    if (current.quantity <= 0) {
-      return;
-    }
-
+    if (current.quantity <= 0) return;
     updateItemState(itemId, { quantity: current.quantity - 1 });
   };
 
@@ -68,20 +75,17 @@ function CheckoutPage() {
 
   const buildReceiptContent = (lines: CheckoutOrderLineInput[]) => {
     const now = new Date();
-    const totalArticles = lines.reduce((sum, line) => sum + line.quantity, 0);
-    const totalToPay = lines.reduce((sum, line) => sum + line.totalPrice, 0);
-
-    const formattedDate = now.toLocaleString("fr-FR");
-
+    const totalArticles = lines.reduce((sum, l) => sum + l.quantity, 0);
+    const totalToPay = lines.reduce((sum, l) => sum + l.totalPrice, 0);
     return [
       "MY STORE",
       "Ticket de caisse",
-      formattedDate,
+      now.toLocaleString("fr-FR"),
       "--------------------------------",
-      ...lines.flatMap((line) => [
-        line.label,
-        `  Quantité : ${line.quantity}`,
-        `  Total : ${line.totalPrice.toFixed(2)} €`,
+      ...lines.flatMap((l) => [
+        l.label,
+        `  Quantité : ${l.quantity}`,
+        `  Total : ${l.totalPrice.toFixed(2)} €`,
       ]),
       "--------------------------------",
       `Articles : ${totalArticles}`,
@@ -93,19 +97,12 @@ function CheckoutPage() {
     try {
       setIsSubmitting(true);
       setError(null);
-
       for (const line of lines) {
-        if (line.quantity <= 0) {
-          continue;
-        }
-
+        if (line.quantity <= 0) continue;
         const unitPrice = line.quantity > 0 ? line.totalPrice / line.quantity : 0;
         await InsertOrder(line.itemId, line.quantity, unitPrice);
       }
-
-      const receiptContent = buildReceiptContent(lines);
-      await SaveReceipt(receiptContent);
-
+      await SaveReceipt(buildReceiptContent(lines));
       setSelectionByItemId({});
     } catch (err) {
       setError(String(err));
@@ -124,7 +121,6 @@ function CheckoutPage() {
               Sélectionnez les produits puis vérifiez le ticket à droite.
             </p>
           </div>
-
           <BackToHomeButton />
         </div>
 
@@ -150,20 +146,13 @@ function CheckoutPage() {
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <section className="min-w-0 space-y-8">
               {nonEmptyCategories.map((category) => (
-                <div
-                  key={category.id}
-                  className="rounded-3xl border bg-card p-5 shadow-sm"
-                >
+                <div key={category.id} className="rounded-3xl border bg-card p-5 shadow-sm">
                   <div className="mb-4">
-                    <h2 className="text-2xl font-semibold tracking-tight">
-                      {category.label}
-                    </h2>
+                    <h2 className="text-2xl font-semibold tracking-tight">{category.label}</h2>
                     <p className="text-sm text-muted-foreground">
-                      {category.items.length} produit
-                      {category.items.length > 1 ? "s" : ""}
+                      {category.items.length} produit{category.items.length > 1 ? "s" : ""}
                     </p>
                   </div>
-
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                     {category.items.map((item) => (
                       <ProductCard
