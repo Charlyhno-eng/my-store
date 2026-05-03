@@ -6,6 +6,10 @@ export function GetCheckoutCategories() {
   return window['go']['main']['App']['GetCheckoutCategories']();
 }
 
+export function GetOrdersHistory() {
+  return window['go']['main']['App']['GetOrdersHistory']();
+}
+
 export function InsertOrder(arg1, arg2, arg3) {
   return window['go']['main']['App']['InsertOrder'](arg1, arg2, arg3);
 }

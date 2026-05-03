@@ -1,12 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
-type BasicPageProps = {
-  title: string;
-  description: string;
-};
-
-function BasicPage({ title, description }: BasicPageProps) {
+function BasicPage({ title, description }: { title: string; description: string }) {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-10">

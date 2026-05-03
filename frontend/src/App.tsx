@@ -4,7 +4,6 @@ import CheckoutPage from "./pages/CheckoutPage";
 import SalesHistoryPage from "./pages/SalesHistoryPage";
 import ProductsPage from "./pages/ProductsPage";
 import StoragePage from "./pages/StoragePage";
-import DailyReportPage from "./pages/DailyReportPage";
 
 export default function App() {
   return (
@@ -14,7 +13,6 @@ export default function App() {
       <Route path="/sales-history" element={<SalesHistoryPage />} />
       <Route path="/products"      element={<ProductsPage />} />
       <Route path="/storage"       element={<StoragePage />} />
-      <Route path="/daily-report"  element={<DailyReportPage />} />
     </Routes>
   );
 }

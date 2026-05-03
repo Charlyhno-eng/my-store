@@ -22,6 +22,16 @@ type CheckoutService struct {
 	db *sql.DB
 }
 
+type OrderHistoryDTO struct {
+	ID        int64   `json:"id"`
+	ItemID     int64   `json:"itemId"`
+	ItemLabel  string  `json:"itemLabel"`
+	Quantity   int64   `json:"quantity"`
+	UnitPrice  float64 `json:"unitPrice"`
+	LineTotal  float64 `json:"lineTotal"`
+	OrderedAt  string  `json:"orderedAt"`
+}
+
 
 // NewCheckoutService creates a new CheckoutService instance
 // with a given database connection.
@@ -152,4 +162,55 @@ func (s *CheckoutService) InsertOrder(itemID int64, quantity int64, unitPrice fl
 	}
 
 	return nil
+}
+
+// GetOrdersHistory select all orders
+func (s *CheckoutService) GetOrdersHistory() ([]OrderHistoryDTO, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+
+	rows, err := s.db.Query(`
+		SELECT
+			o.id,
+			o.item_id,
+			COALESCE(i.label, ''),
+			o.quantity,
+			o.unit_price,
+			(o.quantity * o.unit_price) AS line_total,
+			o.ordered_at
+		FROM orders o
+		INNER JOIN items i ON i.id = o.item_id
+		ORDER BY o.ordered_at DESC, o.id DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query orders history: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []OrderHistoryDTO
+
+	for rows.Next() {
+		var order OrderHistoryDTO
+
+		if err := rows.Scan(
+			&order.ID,
+			&order.ItemID,
+			&order.ItemLabel,
+			&order.Quantity,
+			&order.UnitPrice,
+			&order.LineTotal,
+			&order.OrderedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan order history row: %w", err)
+		}
+
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate order history rows: %w", err)
+	}
+
+	return orders, nil
 }

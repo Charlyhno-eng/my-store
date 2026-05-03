@@ -50,6 +50,31 @@ export namespace service {
 		    return a;
 		}
 	}
+	
+	export class OrderHistoryDTO {
+	    id: number;
+	    itemId: number;
+	    itemLabel: string;
+	    quantity: number;
+	    unitPrice: number;
+	    lineTotal: number;
+	    orderedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OrderHistoryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.itemId = source["itemId"];
+	        this.itemLabel = source["itemLabel"];
+	        this.quantity = source["quantity"];
+	        this.unitPrice = source["unitPrice"];
+	        this.lineTotal = source["lineTotal"];
+	        this.orderedAt = source["orderedAt"];
+	    }
+	}
 
 }
 

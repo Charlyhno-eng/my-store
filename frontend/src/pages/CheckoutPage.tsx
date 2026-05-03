@@ -5,6 +5,7 @@ import { ProductCard } from "@/features/checkout/ProductCard";
 import { ReceiptSidebar } from "@/features/checkout/ReceiptSidebar";
 import type { CategoryWithItems, ItemSelectionState, CheckoutOrderLineInput } from "@/features/checkout/types";
 import { InsertOrder, GetCheckoutCategories, SaveReceipt } from "../../wailsjs/go/main/App";
+import BackToHomeButton from "@/components/navigation/BackToHomeButton";
 
 function CheckoutPage() {
   const [categories, setCategories] = useState<CategoryWithItems[]>([]);
@@ -124,9 +125,7 @@ function CheckoutPage() {
             </p>
           </div>
 
-          <Button asChild variant="outline">
-            <Link to="/">Retour à l’accueil</Link>
-          </Button>
+          <BackToHomeButton />
         </div>
 
         {loading && (

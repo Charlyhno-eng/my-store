@@ -235,3 +235,12 @@ func (a *App) SaveReceipt(content string) error {
 
 	return nil
 }
+
+// GetOrdersHistory select all orders to create a history
+func (a *App) GetOrdersHistory() ([]service.OrderHistoryDTO, error) {
+	if a.checkoutService == nil {
+		return nil, fmt.Errorf("checkout service is not initialized")
+	}
+
+	return a.checkoutService.GetOrdersHistory()
+}
