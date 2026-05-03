@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ProductCard } from "@/features/checkout/ProductCard";
 import { ReceiptSidebar } from "@/features/checkout/ReceiptSidebar";
 import type { CategoryWithItems, ItemSelectionState, CheckoutOrderLineInput } from "@/features/checkout/types";
-import { InsertOrder, GetCheckoutCategories, SaveReceipt, GetItems } from "../../wailsjs/go/main/App";
+import { InsertOrder, GetCheckoutCategories, SaveReceipt, GetItems, AdjustStock } from "../../wailsjs/go/main/App";
 import BackToHomeButton from "@/components/navigation/BackToHomeButton";
 
 function CheckoutPage() {
@@ -11,6 +11,34 @@ function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectionByItemId, setSelectionByItemId] = useState<Record<number, ItemSelectionState>>({});
+
+  async function loadData() {
+    try {
+      const [checkoutData, stockData] = await Promise.all([
+        GetCheckoutCategories(),
+        GetItems(),
+      ]);
+
+      const stockByItemId: Record<number, number> = {};
+      for (const stockItem of stockData ?? []) {
+        stockByItemId[stockItem.id] = stockItem.quantity;
+      }
+
+      const merged: CategoryWithItems[] = (checkoutData ?? []).map((cat) => ({
+        ...cat,
+        items: cat.items.map((item) => ({
+          ...item,
+          stockQuantity: stockByItemId[item.id] ?? -1,
+        })),
+      }));
+
+      setCategories(merged);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     const isWailsAvailable = typeof window !== "undefined" && !!window.go?.main?.App;
@@ -21,27 +49,7 @@ function CheckoutPage() {
       return;
     }
 
-    Promise.all([GetCheckoutCategories(), GetItems()])
-      .then(([checkoutData, stockData]) => {
-        // Build a quick lookup: itemId → stockQuantity
-        const stockByItemId: Record<number, number> = {};
-        for (const stockItem of stockData ?? []) {
-          stockByItemId[stockItem.id] = stockItem.quantity;
-        }
-
-        // Merge stock quantity into each item
-        const merged: CategoryWithItems[] = (checkoutData ?? []).map((cat) => ({
-          ...cat,
-          items: cat.items.map((item) => ({
-            ...item,
-            stockQuantity: stockByItemId[item.id] ?? -1,
-          })),
-        }));
-
-        setCategories(merged);
-      })
-      .catch((err) => { setError(String(err)); })
-      .finally(() => { setLoading(false); });
+    loadData();
   }, []);
 
   const nonEmptyCategories = useMemo(
@@ -97,13 +105,22 @@ function CheckoutPage() {
     try {
       setIsSubmitting(true);
       setError(null);
+
       for (const line of lines) {
-        if (line.quantity <= 0) continue;
+        if (line.quantity <= 0) {
+          continue;
+        }
+
         const unitPrice = line.quantity > 0 ? line.totalPrice / line.quantity : 0;
+
         await InsertOrder(line.itemId, line.quantity, unitPrice);
+        await AdjustStock(line.itemId, -line.quantity);
       }
+
       await SaveReceipt(buildReceiptContent(lines));
       setSelectionByItemId({});
+
+      await loadData();
     } catch (err) {
       setError(String(err));
     } finally {
