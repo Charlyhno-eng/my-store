@@ -43,8 +43,17 @@ sqlite3 db/db.sqlite < db/schema.sql
 ```bash
 wails dev -tags webkit2_41
 ```
+
+## Build the app
+
+```bash
+wails build -clean -tags "webkit2_41"
+```
+
 ---
 
 ## Food icons website
+
+If you want to download icons to populate the /frontend/src/assets/items folder, please find them on the following website :
 
 ([https://www.flaticon.com/free-icons/food](https://www.flaticon.com/free-icons/food))
