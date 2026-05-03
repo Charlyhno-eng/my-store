@@ -17,11 +17,7 @@ export function ProductCard({ item, state, onIncrement, onDecrement, onPriceChan
     <article className="flex h-full min-h-[360px] w-full flex-col rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-4 flex h-36 w-full items-center justify-center overflow-hidden rounded-xl bg-muted">
         {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt={item.label}
-            className="h-full w-full object-contain p-3"
-          />
+          <img src={imageSrc} alt={item.label} className="h-full w-full object-contain p-3" />
         ) : (
           <span className="text-xs text-muted-foreground">Pas d’image</span>
         )}

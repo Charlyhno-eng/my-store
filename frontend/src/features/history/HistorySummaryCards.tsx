@@ -1,17 +1,7 @@
 import type { OrderHistoryItem } from "./types";
+import { formatPrice } from "../../helpers/helpers";
 
-type HistorySummaryCardsProps = {
-  orders: OrderHistoryItem[];
-};
-
-function formatPrice(value: number) {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value);
-}
-
-export function HistorySummaryCards({ orders }: HistorySummaryCardsProps) {
+export function HistorySummaryCards({ orders }: { orders: OrderHistoryItem[] }) {
   const totalOrders = orders.length;
   const totalItemsSold = orders.reduce((sum, order) => sum + order.quantity, 0);
   const totalRevenue = orders.reduce((sum, order) => sum + order.lineTotal, 0);

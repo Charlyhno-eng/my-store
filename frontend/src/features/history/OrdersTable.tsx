@@ -1,29 +1,7 @@
 import type { OrderHistoryItem } from "./types";
+import { formatDate, formatPrice } from "../../helpers/helpers";
 
-type OrdersTableProps = {
-  orders: OrderHistoryItem[];
-};
-
-function formatPrice(value: number) {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value);
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-export function OrdersTable({ orders }: OrdersTableProps) {
+export function OrdersTable({ orders }: { orders: OrderHistoryItem[] }) {
   if (orders.length === 0) {
     return (
       <div className="rounded-2xl border bg-card p-8 text-center shadow-sm">

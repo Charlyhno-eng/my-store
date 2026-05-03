@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import type { CategoryWithItems, ItemSelectionState, CheckoutOrderLineInput } from "@/features/checkout/types";
+import { parsePrice } from "@/helpers/helpers";
 
 type ReceiptSidebarProps = {
   categories: CategoryWithItems[];
@@ -7,12 +8,6 @@ type ReceiptSidebarProps = {
   onValidate: (lines: CheckoutOrderLineInput[]) => Promise<void>;
   isSubmitting: boolean;
 };
-
-function parsePrice(value: string): number {
-  const normalized = value.replace(",", ".").trim();
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 export function ReceiptSidebar({ categories, selectionByItemId, onValidate, isSubmitting }: ReceiptSidebarProps) {
   const selectedItems: CheckoutOrderLineInput[] = categories

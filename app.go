@@ -20,6 +20,7 @@ type App struct {
 	ctx             context.Context
 	db              *sql.DB
 	checkoutService *service.CheckoutService
+	stockService    *service.StockService
 }
 
 
@@ -45,6 +46,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.db = db
 	a.checkoutService = service.NewCheckoutService(db)
+	a.stockService = service.NewStockService(db)
 }
 
 // prepareDatabase ensures that a usable database file exists.
@@ -243,4 +245,117 @@ func (a *App) GetOrdersHistory() ([]service.OrderHistoryDTO, error) {
 	}
 
 	return a.checkoutService.GetOrdersHistory()
+}
+
+// GetCategories retourne toutes les catégories.
+func (a *App) GetCategories() ([]service.CategoryDTO, error) {
+	if a.stockService == nil {
+		return nil, errServiceNotInit("stock")
+	}
+	return a.stockService.GetCategories()
+}
+
+// CreateCategory crée une catégorie et retourne son ID.
+func (a *App) CreateCategory(label string) (int64, error) {
+	if a.stockService == nil {
+		return 0, errServiceNotInit("stock")
+	}
+	return a.stockService.CreateCategory(label)
+}
+
+// UpdateCategory met à jour le libellé d'une catégorie.
+func (a *App) UpdateCategory(id int64, label string) error {
+	if a.stockService == nil {
+		return errServiceNotInit("stock")
+	}
+	return a.stockService.UpdateCategory(id, label)
+}
+
+// DeleteCategory supprime une catégorie (échec si des items y sont rattachés).
+func (a *App) DeleteCategory(id int64) error {
+	if a.stockService == nil {
+		return errServiceNotInit("stock")
+	}
+	return a.stockService.DeleteCategory(id)
+}
+
+// GetItems retourne tous les items avec leur stock courant.
+func (a *App) GetItems() ([]service.ItemWithStockDTO, error) {
+	if a.stockService == nil {
+		return nil, errServiceNotInit("stock")
+	}
+	return a.stockService.GetItems()
+}
+
+// GetItemsByCategory retourne les items d'une catégorie avec leur stock.
+func (a *App) GetItemsByCategory(categoryID int64) ([]service.ItemWithStockDTO, error) {
+	if a.stockService == nil {
+		return nil, errServiceNotInit("stock")
+	}
+	return a.stockService.GetItemsByCategory(categoryID)
+}
+
+// CreateItem crée un item et initialise son stock à 0. Retourne l'ID du nouvel item.
+func (a *App) CreateItem(label string, categoryID int64, imagePath string) (int64, error) {
+	if a.stockService == nil {
+		return 0, errServiceNotInit("stock")
+	}
+	return a.stockService.CreateItem(label, categoryID, imagePath)
+}
+
+// UpdateItem met à jour le libellé, la catégorie et l'image d'un item.
+func (a *App) UpdateItem(id int64, label string, categoryID int64, imagePath string) error {
+	if a.stockService == nil {
+		return errServiceNotInit("stock")
+	}
+	return a.stockService.UpdateItem(id, label, categoryID, imagePath)
+}
+
+// DeleteItem supprime un item (et son stock via CASCADE).
+// Échoue si des commandes référencent cet item.
+func (a *App) DeleteItem(id int64) error {
+	if a.stockService == nil {
+		return errServiceNotInit("stock")
+	}
+	return a.stockService.DeleteItem(id)
+}
+
+// GetStock retourne le stock d'un item précis.
+func (a *App) GetStock(itemID int64) (*service.StockDTO, error) {
+	if a.stockService == nil {
+		return nil, errServiceNotInit("stock")
+	}
+	return a.stockService.GetStock(itemID)
+}
+
+// SetStock fixe la quantité en stock d'un item à une valeur absolue.
+func (a *App) SetStock(itemID int64, quantity int64) error {
+	if a.stockService == nil {
+		return errServiceNotInit("stock")
+	}
+	return a.stockService.SetStock(itemID, quantity)
+}
+
+// AdjustStock ajoute (ou soustrait si négatif) une quantité au stock existant.
+func (a *App) AdjustStock(itemID int64, delta int64) error {
+	if a.stockService == nil {
+		return errServiceNotInit("stock")
+	}
+	return a.stockService.AdjustStock(itemID, delta)
+}
+
+// GetLowStockItems retourne les items dont le stock est ≤ au seuil donné.
+func (a *App) GetLowStockItems(threshold int64) ([]service.ItemWithStockDTO, error) {
+	if a.stockService == nil {
+		return nil, errServiceNotInit("stock")
+	}
+	return a.stockService.GetLowStockItems(threshold)
+}
+
+// ---------------------------------------------------------------------------
+// helper
+// ---------------------------------------------------------------------------
+
+func errServiceNotInit(name string) error {
+	return fmt.Errorf("%s service is not initialized", name)
 }

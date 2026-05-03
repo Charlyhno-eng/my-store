@@ -1,5 +1,19 @@
 export namespace service {
 	
+	export class CategoryDTO {
+	    id: number;
+	    label: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CategoryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	    }
+	}
 	export class ItemDTO {
 	    id: number;
 	    label: string;
@@ -51,6 +65,26 @@ export namespace service {
 		}
 	}
 	
+	export class ItemWithStockDTO {
+	    id: number;
+	    label: string;
+	    categoryId: number;
+	    imagePath: string;
+	    quantity: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ItemWithStockDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.categoryId = source["categoryId"];
+	        this.imagePath = source["imagePath"];
+	        this.quantity = source["quantity"];
+	    }
+	}
 	export class OrderHistoryDTO {
 	    id: number;
 	    itemId: number;
@@ -73,6 +107,22 @@ export namespace service {
 	        this.unitPrice = source["unitPrice"];
 	        this.lineTotal = source["lineTotal"];
 	        this.orderedAt = source["orderedAt"];
+	    }
+	}
+	export class StockDTO {
+	    id: number;
+	    itemId: number;
+	    quantity: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StockDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.itemId = source["itemId"];
+	        this.quantity = source["quantity"];
 	    }
 	}
 
