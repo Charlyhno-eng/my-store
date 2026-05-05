@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,9 @@ import (
 	"my-store/internal/service"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+//go:embed db/db.sqlite
+var embeddedDB embed.FS
 
 
 type App struct {
@@ -49,44 +53,35 @@ func (a *App) startup(ctx context.Context) {
 	a.stockService = service.NewStockService(db)
 }
 
-// prepareDatabase ensures that a usable database file exists.
-// If no database is found, it copies a bundled default database
-// into the user's config directory.
+// prepareDatabase returns a path to a usable database file,
+// copying the embedded seed database on first run if needed.
 func prepareDatabase() (string, error) {
 	dbPath, err := getDatabasePath()
 	if err != nil {
 		return "", err
 	}
 
-	// If database already exists, reuse it
 	if _, err := os.Stat(dbPath); err == nil {
 		return dbPath, nil
 	}
 
-	// Otherwise, copy the bundled database
-	sourcePath, err := getBundledDatabasePath()
-	if err != nil {
-		return "", err
-	}
-
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return "", fmt.Errorf("create target db directory: %w", err)
+		return "", fmt.Errorf("create db directory: %w", err)
 	}
 
-	if err := copyFile(sourcePath, dbPath); err != nil {
-		return "", fmt.Errorf("copy initial database: %w", err)
+	if err := copyEmbeddedDB(dbPath); err != nil {
+		return "", fmt.Errorf("copy embedded database: %w", err)
 	}
 
 	return dbPath, nil
 }
 
-// getDatabasePath determines where the application's database should be stored.
-// It first checks for a local project database, otherwise it falls back
-// to a user-specific config directory.
+// getDatabasePath returns the local dev path if it exists,
+// otherwise falls back to the user config directory.
 func getDatabasePath() (string, error) {
-	projectDBPath := filepath.Join("db", "db.sqlite")
-	if _, err := os.Stat(projectDBPath); err == nil {
-		return projectDBPath, nil
+	localPath := filepath.Join("db", "db.sqlite")
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath, nil
 	}
 
 	configDir, err := os.UserConfigDir()
@@ -102,88 +97,25 @@ func getDatabasePath() (string, error) {
 	return filepath.Join(appDir, "db.sqlite"), nil
 }
 
-// getBundledDatabasePath tries to locate the default database file
-// bundled with the application binary. It checks multiple possible paths.
-func getBundledDatabasePath() (string, error) {
-	execPath, err := os.Executable()
+// copyEmbeddedDB extracts the bundled database to destPath.
+func copyEmbeddedDB(destPath string) error {
+	src, err := embeddedDB.Open("db/db.sqlite")
 	if err != nil {
-		return "", fmt.Errorf("get executable path: %w", err)
+		return fmt.Errorf("open embedded database: %w", err)
 	}
+	defer src.Close()
 
-	execDir := filepath.Dir(execPath)
-
-	candidates := []string{
-		filepath.Join(execDir, "db", "db.sqlite"),
-		filepath.Join(execDir, "..", "..", "db", "db.sqlite"),
-		filepath.Join(execDir, "..", "db", "db.sqlite"),
-		filepath.Join("db", "db.sqlite"),
-	}
-
-	for _, candidate := range candidates {
-		cleaned := filepath.Clean(candidate)
-		if _, err := os.Stat(cleaned); err == nil {
-			return cleaned, nil
-		}
-	}
-
-	return "", fmt.Errorf("could not find bundled database file")
-}
-
-// isValidAppDatabase checks whether a given SQLite database file
-// is valid for this application by verifying the existence of
-// a required table ("categories").
-func isValidAppDatabase(path string) (bool, error) {
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	db, err := sql.Open("sqlite3", path)
-	if err != nil {
-		return false, err
-	}
-	defer db.Close()
-
-	var count int
-	err = db.QueryRow(`
-		SELECT COUNT(*)
-		FROM sqlite_master
-		WHERE type = 'table'
-		AND name = 'categories'
-	`).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-
-	return count > 0, nil
-}
-
-// copyFile copies a file from src to dst.
-// It ensures that the destination file is properly written and synced.
-func copyFile(src string, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("open source file: %w", err)
-	}
-	defer sourceFile.Close()
-
-	destFile, err := os.Create(dst)
+	dst, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("create destination file: %w", err)
 	}
-	defer destFile.Close()
+	defer dst.Close()
 
-	if _, err := io.Copy(destFile, sourceFile); err != nil {
-		return fmt.Errorf("copy file content: %w", err)
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("copy content: %w", err)
 	}
 
-	if err := destFile.Sync(); err != nil {
-		return fmt.Errorf("sync destination file: %w", err)
-	}
-
-	return nil
+	return dst.Sync()
 }
 
 // GetCheckoutCategories retrieves categories and their associated items
@@ -192,22 +124,18 @@ func (a *App) GetCheckoutCategories() ([]service.CategoryWithItemsDTO, error) {
 	if a.checkoutService == nil {
 		return nil, fmt.Errorf("checkout service is not initialized")
 	}
-
 	return a.checkoutService.GetCheckoutCategories()
 }
 
-// InsertOrder creates a new order entry in the database
-// with the given item ID, quantity, and unit price.
+// InsertOrder inserts an order into the database using the CheckoutService.
 func (a *App) InsertOrder(itemID int64, quantity int64, unitPrice float64) error {
 	if a.checkoutService == nil {
 		return fmt.Errorf("checkout service is not initialized")
 	}
-
 	return a.checkoutService.InsertOrder(itemID, quantity, unitPrice)
 }
 
-// SaveReceipt opens a file dialog to let the user choose where to save a receipt.
-// It writes the provided content into a text file.
+// SaveReceipt saves the receipt content to a file using the runtime package.
 func (a *App) SaveReceipt(content string) error {
 	if a.ctx == nil {
 		return fmt.Errorf("application context is not initialized")
@@ -243,11 +171,10 @@ func (a *App) GetOrdersHistory() ([]service.OrderHistoryDTO, error) {
 	if a.checkoutService == nil {
 		return nil, fmt.Errorf("checkout service is not initialized")
 	}
-
 	return a.checkoutService.GetOrdersHistory()
 }
 
-// GetCategories retourne toutes les catégories.
+// GetCategories retrieves all categories from the stock service.
 func (a *App) GetCategories() ([]service.CategoryDTO, error) {
 	if a.stockService == nil {
 		return nil, errServiceNotInit("stock")
@@ -255,7 +182,7 @@ func (a *App) GetCategories() ([]service.CategoryDTO, error) {
 	return a.stockService.GetCategories()
 }
 
-// CreateCategory crée une catégorie et retourne son ID.
+// CreateCategory creates a new category with the given label using the stock service.
 func (a *App) CreateCategory(label string) (int64, error) {
 	if a.stockService == nil {
 		return 0, errServiceNotInit("stock")
@@ -263,7 +190,7 @@ func (a *App) CreateCategory(label string) (int64, error) {
 	return a.stockService.CreateCategory(label)
 }
 
-// UpdateCategory met à jour le libellé d'une catégorie.
+// UpdateCategory updates the label of an existing category using the stock service.
 func (a *App) UpdateCategory(id int64, label string) error {
 	if a.stockService == nil {
 		return errServiceNotInit("stock")
@@ -271,7 +198,7 @@ func (a *App) UpdateCategory(id int64, label string) error {
 	return a.stockService.UpdateCategory(id, label)
 }
 
-// DeleteCategory supprime une catégorie (échec si des items y sont rattachés).
+// DeleteCategory deletes a category by its ID using the stock service.
 func (a *App) DeleteCategory(id int64) error {
 	if a.stockService == nil {
 		return errServiceNotInit("stock")
@@ -279,7 +206,7 @@ func (a *App) DeleteCategory(id int64) error {
 	return a.stockService.DeleteCategory(id)
 }
 
-// GetItems retourne tous les items avec leur stock courant.
+// GetItems retrieves all items from the stock service.
 func (a *App) GetItems() ([]service.ItemWithStockDTO, error) {
 	if a.stockService == nil {
 		return nil, errServiceNotInit("stock")
@@ -287,7 +214,7 @@ func (a *App) GetItems() ([]service.ItemWithStockDTO, error) {
 	return a.stockService.GetItems()
 }
 
-// GetItemsByCategory retourne les items d'une catégorie avec leur stock.
+// GetItemsByCategory retrieves all items by their category ID using the stock service.
 func (a *App) GetItemsByCategory(categoryID int64) ([]service.ItemWithStockDTO, error) {
 	if a.stockService == nil {
 		return nil, errServiceNotInit("stock")
@@ -295,7 +222,7 @@ func (a *App) GetItemsByCategory(categoryID int64) ([]service.ItemWithStockDTO, 
 	return a.stockService.GetItemsByCategory(categoryID)
 }
 
-// CreateItem crée un item et initialise son stock à 0. Retourne l'ID du nouvel item.
+// CreateItem creates a new item with the given label, category ID, and image path using the stock service.
 func (a *App) CreateItem(label string, categoryID int64, imagePath string) (int64, error) {
 	if a.stockService == nil {
 		return 0, errServiceNotInit("stock")
@@ -303,7 +230,7 @@ func (a *App) CreateItem(label string, categoryID int64, imagePath string) (int6
 	return a.stockService.CreateItem(label, categoryID, imagePath)
 }
 
-// UpdateItem met à jour le libellé, la catégorie et l'image d'un item.
+// UpdateItem updates the label, category ID, and image path of an existing item using the stock service.
 func (a *App) UpdateItem(id int64, label string, categoryID int64, imagePath string) error {
 	if a.stockService == nil {
 		return errServiceNotInit("stock")
@@ -311,8 +238,7 @@ func (a *App) UpdateItem(id int64, label string, categoryID int64, imagePath str
 	return a.stockService.UpdateItem(id, label, categoryID, imagePath)
 }
 
-// DeleteItem supprime un item (et son stock via CASCADE).
-// Échoue si des commandes référencent cet item.
+// DeleteItem deletes an item by its ID using the stock service.
 func (a *App) DeleteItem(id int64) error {
 	if a.stockService == nil {
 		return errServiceNotInit("stock")
@@ -320,7 +246,7 @@ func (a *App) DeleteItem(id int64) error {
 	return a.stockService.DeleteItem(id)
 }
 
-// GetStock retourne le stock d'un item précis.
+// GetStock retrieves the stock information for an item by its ID using the stock service.
 func (a *App) GetStock(itemID int64) (*service.StockDTO, error) {
 	if a.stockService == nil {
 		return nil, errServiceNotInit("stock")
@@ -328,7 +254,7 @@ func (a *App) GetStock(itemID int64) (*service.StockDTO, error) {
 	return a.stockService.GetStock(itemID)
 }
 
-// SetStock fixe la quantité en stock d'un item à une valeur absolue.
+// SetStock sets the stock quantity for an item by its ID using the stock service.
 func (a *App) SetStock(itemID int64, quantity int64) error {
 	if a.stockService == nil {
 		return errServiceNotInit("stock")
@@ -336,7 +262,7 @@ func (a *App) SetStock(itemID int64, quantity int64) error {
 	return a.stockService.SetStock(itemID, quantity)
 }
 
-// AdjustStock ajoute (ou soustrait si négatif) une quantité au stock existant.
+// AdjustStock adjusts the stock quantity for an item by its ID using the stock service.
 func (a *App) AdjustStock(itemID int64, delta int64) error {
 	if a.stockService == nil {
 		return errServiceNotInit("stock")
@@ -344,7 +270,7 @@ func (a *App) AdjustStock(itemID int64, delta int64) error {
 	return a.stockService.AdjustStock(itemID, delta)
 }
 
-// GetLowStockItems retourne les items dont le stock est ≤ au seuil donné.
+// GetLowStockItems retrieves items with low stock quantity using the stock service.
 func (a *App) GetLowStockItems(threshold int64) ([]service.ItemWithStockDTO, error) {
 	if a.stockService == nil {
 		return nil, errServiceNotInit("stock")
@@ -352,10 +278,8 @@ func (a *App) GetLowStockItems(threshold int64) ([]service.ItemWithStockDTO, err
 	return a.stockService.GetLowStockItems(threshold)
 }
 
-// ---------------------------------------------------------------------------
-// helper
-// ---------------------------------------------------------------------------
 
+// errServiceNotInit returns an error indicating that a service is not initialized.
 func errServiceNotInit(name string) error {
 	return fmt.Errorf("%s service is not initialized", name)
 }
