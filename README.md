@@ -50,6 +50,8 @@ wails dev -tags webkit2_41
 wails build -clean -tags "webkit2_41"
 ```
 
+Find the executable /build/bin
+
 ---
 
 ## Food icons website
@@ -57,3 +59,5 @@ wails build -clean -tags "webkit2_41"
 If you want to download icons to populate the /frontend/src/assets/items folder, please find them on the following website :
 
 ([https://www.flaticon.com/free-icons/food](https://www.flaticon.com/free-icons/food))
+
+Place your images in the folder /frontend/src/assets/items
